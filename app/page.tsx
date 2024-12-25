@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThumbsUp, ThumbsDown, Music2 } from "lucide-react";
 
-import { Redirect } from "./components/Redirect";
+// import { Redirect } from "./components/Redirect";
 export default function Home() {
   return (
     <main>
       <Appbar />
-      <Redirect />
+      {/* <Redirect /> */}
 
       <section className="py-12">
         <div className="container px-4 mx-auto">
