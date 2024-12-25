@@ -1,13 +1,8 @@
 import { Appbar } from "./components/Appbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ThumbsUp,
-  ThumbsDown,
-  Music2,
-  PawPrintIcon as Paw,
-} from "lucide-react";
-import Image from "next/image";
+import { ThumbsUp, ThumbsDown, Music2 } from "lucide-react";
+
 import { Redirect } from "./components/Redirect";
 export default function Home() {
   return (

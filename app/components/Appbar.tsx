@@ -1,13 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  ThumbsUp,
-  ThumbsDown,
-  Music2,
-  PawPrintIcon as Paw,
-} from "lucide-react";
+
+import { PawPrintIcon as Paw } from "lucide-react";
 import Image from "next/image";
 import { signIn, signOut, useSession } from "next-auth/react";
 
