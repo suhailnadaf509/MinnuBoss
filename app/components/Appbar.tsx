@@ -12,7 +12,7 @@ export function Appbar() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
       {/* Hero Section */}
       <div className="flex justify-between bg-amber-100 px-10">
-        <div className="text-sm">MinnuBoss</div>
+        <div className="text-xl">suhailBoss</div>
         <div>
           {!session.data?.user && (
             <button
