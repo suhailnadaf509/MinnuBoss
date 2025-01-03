@@ -92,15 +92,13 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      message: "Stream created successfully",
-      id: stream.id,
+      ...stream,
+      hasUpvoted: false,
+      upvotes: 0,
     });
   } catch (error) {
     console.error("Stream creation error:", error);
 
-    // Handle Zod validation errors
-
-    // Handle other errors
     return NextResponse.json(
       {
         message: "Failed to create stream",
