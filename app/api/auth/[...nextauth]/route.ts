@@ -30,33 +30,41 @@ const handler = NextAuth({
       }
 
       try {
-        // First check if user exists
         const existingUser = await prismaClient.user.findUnique({
-          where: {
-            email: user.email,
-          },
+          where: { email: user.email },
         });
 
-        // Only create user if they don't exist
         if (!existingUser) {
-          await prismaClient.user.create({
-            data: {
-              email: user.email,
-              provider: "Google",
-            },
+          const newUser = await prismaClient.user.create({
+            data: { email: user.email, provider: "Google" },
           });
+          // Return newUser to ensure it has an ID
+          user.id = newUser.id; // Attach ID to user object
+        } else {
+          user.id = existingUser.id; // Attach existing user's ID
         }
       } catch (error) {
         console.error("Error during sign in:", error);
-        return false; // Return false on error to prevent sign in
+        return false;
       }
 
       return true;
     },
-    async session({ session, user }) {
-      if (session?.user) {
-        session.user.id = user.id; // Attach `id` to session.user
+
+    async jwt({ token, user }) {
+      console.log("JWT Callback - User:", user);
+      if (user) {
+        token.id = user.id; // Ensure user.id exists
       }
+      console.log("JWT Token:", token);
+      return token;
+    },
+    async session({ session, token }) {
+      console.log("Session Callback - Token:", token);
+      if (token) {
+        session.user.id = token.id as string; // Attach `id` to session.user
+      }
+      console.log("Session:", session);
       return session;
     },
   },

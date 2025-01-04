@@ -80,7 +80,7 @@ export default function CatMusicQueue() {
       if (!Array.isArray(streams)) {
         console.error("Streams is not an array:", streams);
         setQueue([]);
-        setIsLoading(false);
+
         toast({
           title: "Error",
           description: "Invalid data format received from server",
@@ -103,16 +103,16 @@ export default function CatMusicQueue() {
         (a, b) => b.upvotes - a.upvotes
       );
       setQueue(sortedData);
-      setIsLoading(false);
     } catch (error) {
       console.error("Error fetching streams:", error);
-      setQueue([]);
-      setIsLoading(false);
+
       toast({
         title: "Error",
         description: "Failed to load streams. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false); // Ensure loading state is reset
     }
   };
   useEffect(() => {
@@ -124,10 +124,13 @@ export default function CatMusicQueue() {
     // Simulate fetching user data from API
     const fetchUserData = async () => {
       try {
-        const session = await getSession(); // Fetch session data
+        const session = await getSession();
         console.log("Session Data:", session); // Debug response
-        setUserName(session?.user?.email || "user");
-        setUserId(session?.user?.id || null); // Use email or fallback
+        if (!session) {
+          throw new Error("No active session found");
+        }
+        setUserName(session.user.email || "user");
+        setUserId(session.user.id || null);
       } catch (error) {
         console.error("Error fetching session data:", error);
       }
