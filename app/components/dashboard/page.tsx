@@ -37,6 +37,8 @@ interface VideoItem {
 }
 const Refresh_Interval = 20 * 1000;
 export default function CatMusicQueue() {
+  const [userId, setUserId] = useState<string | null>(null); // New state for userId
+
   const [userName, setUserName] = useState<string>("");
   const [videoUrl, setVideoUrl] = useState("");
   const [currentVideo, setCurrentVideo] = useState<string>("dQw4w9WgXcQ"); // Default video
@@ -50,7 +52,26 @@ export default function CatMusicQueue() {
         cache: "no-store",
       });
 
-      if (!res.ok) throw new Error("Failed to fetch streams");
+      if (res.status === 401) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to view your streams",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (res.status === 404) {
+        toast({
+          title: "Error",
+          description: "User not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!res.ok)
+        throw new Error(`Failed to fetch streams: ${res.statusText}`);
 
       const { streams, userVotes } = await res.json(); // Destructure to get the streams array
       console.log("Received streams:", streams);
@@ -105,7 +126,8 @@ export default function CatMusicQueue() {
       try {
         const session = await getSession(); // Fetch session data
         console.log("Session Data:", session); // Debug response
-        setUserName(session?.user?.email || "user"); // Use email or fallback
+        setUserName(session?.user?.email || "user");
+        setUserId(session?.user?.id || null); // Use email or fallback
       } catch (error) {
         console.error("Error fetching session data:", error);
       }
@@ -115,6 +137,14 @@ export default function CatMusicQueue() {
   }, []);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) {
+      toast({
+        title: "Authentication Error",
+        description: "Please sign in to add videos to the queue",
+        variant: "destructive",
+      });
+      return;
+    }
     const videoId = getYouTubeVideoId(videoUrl);
     if (!videoId) {
       toast({
@@ -132,7 +162,7 @@ export default function CatMusicQueue() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          creatorId: "37fd1252-c695-4b9e-a08d-8ce115ba7738",
+          userId: userId,
           url: videoUrl,
         }),
       });

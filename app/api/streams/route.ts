@@ -10,7 +10,7 @@ const YOUTUBE_REGEX =
 
 // Enhanced schema with validation
 const CreateStreamSchema = z.object({
-  creatorId: z.string(),
+  userId: z.string(),
   url: z.string(),
 });
 
@@ -36,7 +36,15 @@ function processThumbnails(thumbnails: Array<{ width: number; url: string }>) {
 export async function POST(req: Request) {
   try {
     // Validate request data
-    const data = CreateStreamSchema.parse(await req.json());
+    const body = await req.json().catch(() => null);
+
+    if (!body) {
+      return NextResponse.json(
+        { message: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+    const data = CreateStreamSchema.parse(body);
 
     // Validate YouTube URL
     const ytMatch = data.url.match(YOUTUBE_REGEX);
@@ -80,7 +88,7 @@ export async function POST(req: Request) {
     // Create stream record
     const stream = await prismaClient.stream.create({
       data: {
-        userId: data.creatorId,
+        userId: data.userId,
         url: data.url,
         extractedId,
         type: "Youtube",
@@ -100,12 +108,8 @@ export async function POST(req: Request) {
     console.error("Stream creation error:", error);
 
     return NextResponse.json(
-      {
-        message: "Failed to create stream",
-      },
-      {
-        status: 500,
-      }
+      { message: "Failed to create stream" },
+      { status: 500 }
     );
   }
 }
