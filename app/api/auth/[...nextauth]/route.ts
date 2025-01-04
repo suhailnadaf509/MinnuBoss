@@ -38,10 +38,9 @@ const handler = NextAuth({
           const newUser = await prismaClient.user.create({
             data: { email: user.email, provider: "Google" },
           });
-          // Return newUser to ensure it has an ID
-          user.id = newUser.id; // Attach ID to user object
+          user.id = newUser.id; // Ensure the new user has an ID
         } else {
-          user.id = existingUser.id; // Attach existing user's ID
+          user.id = existingUser.id; // Use the existing user's ID
         }
       } catch (error) {
         console.error("Error during sign in:", error);
@@ -52,19 +51,15 @@ const handler = NextAuth({
     },
 
     async jwt({ token, user }) {
-      console.log("JWT Callback - User:", user);
-      if (user) {
-        token.id = user.id; // Ensure user.id exists
+      if (user && user.id) {
+        token.id = user.id;
       }
-      console.log("JWT Token:", token);
       return token;
     },
     async session({ session, token }) {
-      console.log("Session Callback - Token:", token);
-      if (token) {
-        session.user.id = token.id as string; // Attach `id` to session.user
+      if (token && token.id) {
+        session.user.id = token.id as string;
       }
-      console.log("Session:", session);
       return session;
     },
   },

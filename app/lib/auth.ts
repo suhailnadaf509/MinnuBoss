@@ -38,11 +38,35 @@ export const authOptions: AuthOptions = {
 
       return true;
     },
-    async session({ session, user }) {
+    async session({ session, token }) {
+      // Change parameter from user to token
       if (session?.user) {
-        session.user.id = user.id;
+        // Fetch the user from database to get the ID
+        const dbUser = await prismaClient.user.findUnique({
+          where: {
+            email: session.user.email as string,
+          },
+        });
+
+        if (dbUser) {
+          session.user.id = dbUser.id;
+        }
       }
       return session;
+    },
+    async jwt({ token, user }) {
+      // Add JWT callback
+      if (user) {
+        const dbUser = await prismaClient.user.findUnique({
+          where: {
+            email: user.email as string,
+          },
+        });
+        if (dbUser) {
+          token.id = dbUser.id;
+        }
+      }
+      return token;
     },
   },
 };
