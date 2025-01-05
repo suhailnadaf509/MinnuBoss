@@ -1,6 +1,6 @@
 "use client";
 import { getSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -34,58 +34,78 @@ interface VideoItem {
   upvotes: number;
   haveUpvoted: boolean;
   haveDownvoted: boolean;
+  voteType: "upvote" | "downvote" | null;
 }
 const Refresh_Interval = 20 * 1000;
 export default function CatMusicQueue() {
   const [userId, setUserId] = useState<string | null>(null); // New state for userId
 
+  const [currentVideo, setCurrentVideo] = useState<string | null>(null); // Updated: No default video
+
   const [userName, setUserName] = useState<string>("");
-  const [videoUrl, setVideoUrl] = useState("");
-  const [currentVideo, setCurrentVideo] = useState<string>("dQw4w9WgXcQ"); // Default video
+  const [videoUrl, setVideoUrl] = useState(""); // Default video
   const [isLoading, setIsLoading] = useState(true);
   const [queue, setQueue] = useState<VideoItem[]>([]);
+  const playerRef = useRef<HTMLIFrameElement>(null);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  useEffect(() => {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName("script")[0];
+    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+  }, []);
+  const handleVideoEnd = () => {
+    if (queue.length > 1) {
+      const updatedQueue = [...queue];
+      updatedQueue.shift();
+      setQueue(updatedQueue);
+      setCurrentVideo(updatedQueue[0].extractedId);
+      localStorage.setItem("currentVideo", updatedQueue[0].extractedId);
+    } else {
+      setCurrentVideo(null);
+      localStorage.removeItem("currentVideo");
+    }
+  };
+
+  const handleSkip = () => {
+    handleVideoEnd(); // Reuse the video end logic for skipping
+  };
+  useEffect(() => {
+    const savedVideo = localStorage.getItem("currentVideo");
+    if (savedVideo && isFirstLoad) {
+      setCurrentVideo(savedVideo);
+      setIsFirstLoad(false);
+    } else if (isFirstLoad && queue.length > 0 && !currentVideo) {
+      setCurrentVideo(queue[0].extractedId);
+      localStorage.setItem("currentVideo", queue[0].extractedId);
+      setIsFirstLoad(false);
+    }
+  }, [queue, currentVideo, isFirstLoad]);
+
   const fetchStreams = async () => {
     try {
-      setIsLoading(true);
       const res = await fetch("/api/streams/my", {
         credentials: "include",
         cache: "no-store",
       });
 
-      if (res.status === 401) {
-        toast({
-          title: "Authentication Error",
-          description: "Please sign in to view your streams",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (res.status === 404) {
-        toast({
-          title: "Error",
-          description: "User not found",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!res.ok)
+      if (!res.ok) {
+        if (res.status === 401) {
+          toast({
+            title: "Authentication Error",
+            description: "Please sign in to view your streams",
+            variant: "destructive",
+          });
+          return;
+        }
         throw new Error(`Failed to fetch streams: ${res.statusText}`);
+      }
 
       const { streams, userVotes } = await res.json(); // Destructure to get the streams array
-      console.log("Received streams:", streams);
-      console.log("Received user votes:", userVotes);
 
       if (!Array.isArray(streams)) {
         console.error("Streams is not an array:", streams);
         setQueue([]);
-
-        toast({
-          title: "Error",
-          description: "Invalid data format received from server",
-          variant: "destructive",
-        });
         return;
       }
       const updatedStreams = streams.map((stream) => {
@@ -95,7 +115,9 @@ export default function CatMusicQueue() {
         );
         return {
           ...stream,
-          voteType: userVote?.voteType || null, // Add voteType or null if no vote exists
+          voteType: userVote?.voteType || null,
+          haveUpvoted: userVote?.voteType === "upvote",
+          haveDownvoted: userVote?.voteType === "downvote", // Add voteType or null if no vote exists
         };
       });
 
@@ -125,12 +147,11 @@ export default function CatMusicQueue() {
     const fetchUserData = async () => {
       try {
         const session = await getSession();
-        console.log("Session Data:", session); // Debug response
-        if (!session) {
-          throw new Error("No active session found");
+
+        if (session?.user) {
+          setUserName(session.user.email || "user");
+          setUserId(session.user.id || null);
         }
-        setUserName(session.user.email || "user");
-        setUserId(session.user.id || null);
       } catch (error) {
         console.error("Error fetching session data:", error);
       }
@@ -138,8 +159,8 @@ export default function CatMusicQueue() {
 
     fetchUserData();
   }, []);
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!userId) {
       toast({
         title: "Authentication Error",
@@ -193,37 +214,44 @@ export default function CatMusicQueue() {
     increment: number,
     isUpvote: boolean
   ) => {
+    const currentItem = queue.find((item) => item.id === id);
+    if (!currentItem) return;
+
+    if (
+      (isUpvote && currentItem.haveUpvoted) ||
+      (!isUpvote && currentItem.haveDownvoted)
+    ) {
+      return;
+    }
+
+    const updatedQueue = queue.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            upvotes: item.upvotes + increment,
+            haveUpvoted: isUpvote ? true : item.haveUpvoted, // Track upvote
+            haveDownvoted: !isUpvote ? true : item.haveDownvoted, // Track downvote
+          }
+        : item
+    );
+
+    setQueue(updatedQueue.sort((a, b) => b.upvotes - a.upvotes));
     try {
-      const updatedQueue = queue.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              upvotes: item.upvotes + increment,
-              haveUpvoted: isUpvote ? true : item.haveUpvoted, // Track upvote
-              haveDownvoted: !isUpvote ? true : item.haveDownvoted, // Track downvote
-            }
-          : item
-      );
-
-      setQueue(updatedQueue.sort((a, b) => b.upvotes - a.upvotes));
-
-      const upvotes = updatedQueue.find((item) => item.id === id)?.upvotes ?? 0;
-
       const res = await fetch("/api/streams/upvote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ streamId: id, upvotes }),
+        body: JSON.stringify({
+          streamId: id,
+          voteType: isUpvote ? "upvote" : "downvote",
+        }),
       });
 
-      if (!res.ok) throw new Error("Failed to update vote");
-    } catch (error) {
+      if (!res.ok) {
+        throw new Error("Failed to update vote");
+      }
+    } catch (error: any) {
       console.error("Error updating vote:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update vote. Please try again.",
-        variant: "destructive",
-      });
-      fetchStreams(); // Sync with the backend
+      await fetchStreams();
     }
   };
 
@@ -255,6 +283,7 @@ export default function CatMusicQueue() {
   return (
     <div className="min-h-screen bg-orange-50">
       {/* Cat ears decoration */}
+
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl">
         <div className="relative w-full">
           <div className="absolute -top-2 -left-8 w-16 h-16 bg-orange-200 rounded-full transform -rotate-45"></div>
@@ -290,18 +319,35 @@ export default function CatMusicQueue() {
 
         {/* Current Video Player */}
         <Card className="p-4 bg-white/80 backdrop-blur shadow-xl">
-          <div className="aspect-video">
-            <iframe
-              width="100%"
-              height="100%"
-              src={`https://www.youtube.com/embed/${currentVideo}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="rounded-lg"
-            ></iframe>
-          </div>
+          {currentVideo ? (
+            <div className="space-y-4">
+              <div className="aspect-video">
+                <iframe
+                  ref={playerRef}
+                  width="100%"
+                  height="100%"
+                  src={`https://www.youtube.com/embed/${currentVideo}?enablejsapi=1&autoplay=1&origin=${window.location.origin}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  onEnded={handleVideoEnd} // Triggered when video ends
+                  className="rounded-lg"
+                ></iframe>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSkip}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  Skip Video
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-orange-600">
+              No video is currently playing. Add a video to the queue!
+            </p>
+          )}
         </Card>
-
         {/* Video Submission */}
         <Card className="p-4 bg-white/80 backdrop-blur">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -317,7 +363,6 @@ export default function CatMusicQueue() {
                 className="flex-1"
               />
               <Button
-                onClick={handleSubmit}
                 type="submit"
                 className="bg-orange-500 hover:bg-orange-600"
               >
@@ -340,6 +385,7 @@ export default function CatMusicQueue() {
             )}
           </form>
         </Card>
+        {/* Queue */}
 
         {/* Queue */}
         <Card className="p-4 bg-white/80 backdrop-blur">
@@ -354,12 +400,10 @@ export default function CatMusicQueue() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      handleVote(item.id, 1, item.haveUpvoted ? false : true)
-                    }
-                    disabled={item.haveUpvoted || item.haveDownvoted} // Disable if the user has voted (upvoted or downvoted)
+                    onClick={() => handleVote(item.id, 1, true)}
+                    disabled={item.voteType === "upvote"} // Disable if the user has voted (upvoted or downvoted)
                     className={`text-orange-500 hover:text-orange-600 hover:bg-orange-50 p-2 h-auto ${
-                      item.haveUpvoted || item.haveDownvoted
+                      item.voteType === "upvote"
                         ? "opacity-50 cursor-not-allowed"
                         : ""
                     }`}
@@ -372,12 +416,10 @@ export default function CatMusicQueue() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      handleVote(item.id, -1, item.haveDownvoted ? false : true)
-                    }
-                    disabled={item.haveDownvoted || item.haveUpvoted} // Disable if the user has voted (downvoted or upvoted)
+                    onClick={() => handleVote(item.id, -1, false)}
+                    disabled={item.voteType === "downvote"} // Disable if the user has voted (downvoted or upvoted)
                     className={`text-orange-500 hover:text-orange-600 hover:bg-orange-50 p-2 h-auto ${
-                      item.haveDownvoted || item.haveUpvoted
+                      item.voteType === "downvote"
                         ? "opacity-50 cursor-not-allowed"
                         : ""
                     }`}
